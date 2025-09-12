@@ -31,6 +31,7 @@ export default function Home() {
   const [error, setError] = useState<ErrorDetails | null>(null);
   const [employeeName, setEmployeeName] = useState('');
   const [generatedReport, setGeneratedReport] = useState<{excelBuffer: Buffer, fileName: string} | null>(null);
+  const [hasEditsAfterGeneration, setHasEditsAfterGeneration] = useState(false);
 
   const handleFileSelect = async (file: File) => {
     setIsUploading(true);
@@ -100,6 +101,11 @@ export default function Home() {
         ? { ...receipt, data: newData }
         : receipt
     ));
+    
+    // Mark that edits have been made after generation
+    if (generatedReport) {
+      setHasEditsAfterGeneration(true);
+    }
   };
 
   const handleExport = () => {
@@ -153,6 +159,11 @@ export default function Home() {
 
   const removeReceipt = (receiptId: string) => {
     setReceipts(prev => prev.filter(receipt => receipt.id !== receiptId));
+    
+    // Mark that edits have been made after generation
+    if (generatedReport) {
+      setHasEditsAfterGeneration(true);
+    }
   };
 
   // Check if all receipts have required fields completed
@@ -226,6 +237,9 @@ export default function Home() {
         excelBuffer: Buffer.from(excelBuffer),
         fileName
       });
+      
+      // Reset edit tracking since we just generated a fresh report
+      setHasEditsAfterGeneration(false);
       
       console.log('[MainPage] Report generation completed and stored');
       
@@ -337,7 +351,13 @@ export default function Home() {
               <input
                 type="text"
                 value={employeeName}
-                onChange={(e) => setEmployeeName(e.target.value)}
+                onChange={(e) => {
+                  setEmployeeName(e.target.value);
+                  // Mark that edits have been made after generation
+                  if (generatedReport) {
+                    setHasEditsAfterGeneration(true);
+                  }
+                }}
                 className={`w-full max-w-md p-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 ${
                   !employeeName.trim() 
                     ? 'border-amber-400 bg-amber-50' 
@@ -357,16 +377,16 @@ export default function Home() {
             <div className="mt-6 bg-white rounded-lg shadow-lg p-6">
               <div className="flex justify-between items-center">
                 <div className="flex items-center space-x-4">
-                  {areAllReceiptsComplete() && !generatedReport && (
+                  {areAllReceiptsComplete() && (!generatedReport || hasEditsAfterGeneration) && (
                     <button
                       onClick={handleProcessExpenseReport}
                       className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
                     >
-                      Process Expense Report
+                      {hasEditsAfterGeneration ? 'Re-Process Expense Report' : 'Process Expense Report'}
                     </button>
                   )}
                   
-                  {generatedReport && (
+                  {generatedReport && !hasEditsAfterGeneration && (
                     <div className="flex items-center space-x-4">
                       {/* Creative File Icon */}
                       <div className="flex items-center space-x-3 bg-green-50 px-4 py-3 rounded-lg border border-green-200">
@@ -395,6 +415,39 @@ export default function Home() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                         <span>Download</span>
+                      </button>
+                    </div>
+                  )}
+                  
+                  {generatedReport && hasEditsAfterGeneration && (
+                    <div className="flex items-center space-x-4">
+                      {/* Modified File Icon */}
+                      <div className="flex items-center space-x-3 bg-amber-50 px-4 py-3 rounded-lg border border-amber-200">
+                        <div className="relative">
+                          <svg className="w-8 h-8 text-amber-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                          </svg>
+                          {/* Modified Badge */}
+                          <div className="absolute -top-1 -right-1 bg-amber-600 text-white text-xs px-1 py-0.5 rounded-full font-bold">
+                            !
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-amber-800">Report Modified</p>
+                          <p className="text-xs text-amber-600">Changes detected - re-process to update</p>
+                        </div>
+                      </div>
+                      
+                      {/* Download Previous Button */}
+                      <button
+                        onClick={handleDownloadReport}
+                        className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
+                        title="Download previous version (before edits)"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span>Download Old</span>
                       </button>
                     </div>
                   )}

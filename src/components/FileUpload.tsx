@@ -7,6 +7,7 @@ import { ImageConverter } from '@/lib/image-converter';
 
 interface FileUploadProps {
   onFileSelect: (file: File) => void;
+  onMultipleFilesSelect: (files: File[]) => void;
   isUploading?: boolean;
 }
 
@@ -16,10 +17,76 @@ interface ConversionStatus {
   message?: string;
 }
 
-export default function FileUpload({ onFileSelect, isUploading = false }: FileUploadProps) {
+export default function FileUpload({ onFileSelect, onMultipleFilesSelect, isUploading = false }: FileUploadProps) {
   const [preview, setPreview] = useState<string | null>(null);
   const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
   const [conversionStatus, setConversionStatus] = useState<ConversionStatus>({ isConverting: false });
+
+  const handleMultipleFiles = async (files: File[]) => {
+    console.log(`[FileUpload] Processing ${files.length} files`);
+    
+    if (files.length > 10) {
+      const proceed = confirm(
+        `You've selected ${files.length} files. For best performance, we recommend processing 10 or fewer files at a time.\n\nDo you want to continue anyway?`
+      );
+      if (!proceed) return;
+    }
+    
+    // Process each file through the same conversion logic as single files
+    const processedFiles: File[] = [];
+    const errors: string[] = [];
+    
+    setConversionStatus({ 
+      isConverting: true, 
+      message: `Processing ${files.length} files...` 
+    });
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      console.log(`[FileUpload] Converting file ${i + 1}/${files.length}: ${file.name}`);
+      
+      try {
+        // Apply the same conversion logic as single files
+        const conversionResult = await ImageConverter.convertToJPEG(file);
+        
+        if (conversionResult.originalFormat && conversionResult.originalFormat !== 'jpeg' && conversionResult.originalFormat !== 'png') {
+          if (!conversionResult.success) {
+            console.error(`[FileUpload] Conversion failed for ${file.name}:`, conversionResult.error);
+            errors.push(`${file.name}: Conversion failed - ${conversionResult.error}`);
+            continue;
+          }
+        }
+        
+        const processedFile = conversionResult.file || file;
+        
+        // Validate the processed file
+        const validationResult = await ImageValidator.validateImage(processedFile);
+        
+        if (!validationResult.isValid) {
+          console.error(`[FileUpload] Validation failed for ${file.name}:`, validationResult.errors);
+          errors.push(`${file.name}: ${validationResult.errors.join(', ')}`);
+          continue;
+        }
+        
+        processedFiles.push(processedFile);
+        
+      } catch (error) {
+        console.error(`[FileUpload] Error processing ${file.name}:`, error);
+        errors.push(`${file.name}: Processing error`);
+      }
+    }
+    
+    setConversionStatus({ isConverting: false });
+    
+    if (errors.length > 0) {
+      setValidationWarnings(errors);
+      alert(`Some files failed to process:\n${errors.join('\n')}\n\nSuccessful files will still be processed.`);
+    }
+    
+    if (processedFiles.length > 0) {
+      onMultipleFilesSelect(processedFiles);
+    }
+  };
 
   const handleFileProcessing = async (file: File) => {
     setValidationWarnings([]);
@@ -114,11 +181,15 @@ export default function FileUpload({ onFileSelect, isUploading = false }: FileUp
       'image/*': ['.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp'],
       'application/pdf': ['.pdf']
     },
-    maxFiles: 1,
+    multiple: true,
     onDrop: async (acceptedFiles) => {
-      const file = acceptedFiles[0];
-      if (file) {
+      if (acceptedFiles.length === 1) {
+        // Single file - use existing logic
+        const file = acceptedFiles[0];
         await handleFileProcessing(file);
+      } else if (acceptedFiles.length > 1) {
+        // Multiple files - pass to parent for batch processing
+        await handleMultipleFiles(acceptedFiles);
       }
     }
   });
@@ -164,14 +235,17 @@ export default function FileUpload({ onFileSelect, isUploading = false }: FileUp
             </svg>
             
             {isDragActive ? (
-              <p className="text-lg text-blue-600">Drop the receipt here...</p>
+              <p className="text-lg text-blue-600">Drop the receipt(s) here...</p>
             ) : (
               <div>
                 <p className="text-lg text-gray-600 mb-2">
-                  Drag & drop a receipt here, or click to select
+                  Drag & drop receipt(s) here, or click to select
                 </p>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-gray-500 mb-1">
                   Supports JPG, PNG, PDF, HEIC (iPhone), and WebP (Android)
+                </p>
+                <p className="text-xs text-blue-600 font-medium">
+                  💡 Select multiple files at once for batch processing! (Recommended: 10 or fewer)
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
                   Mobile formats will be automatically converted to JPEG

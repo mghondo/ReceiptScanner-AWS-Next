@@ -32,6 +32,78 @@ export default function Home() {
   const [employeeName, setEmployeeName] = useState('');
   const [generatedReport, setGeneratedReport] = useState<{excelBuffer: Buffer, fileName: string} | null>(null);
   const [hasEditsAfterGeneration, setHasEditsAfterGeneration] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number; fileName: string } | null>(null);
+
+  const handleMultipleFiles = async (files: File[]) => {
+    setIsUploading(true);
+    setError(null);
+    setUploadProgress({ current: 0, total: files.length, fileName: '' });
+
+    console.log(`[MainPage] Processing ${files.length} files in batch`);
+
+    const newReceipts: ReceiptEntry[] = [];
+    const errors: string[] = [];
+
+    // Files are already processed (HEIC converted, validated) by FileUpload component
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      setUploadProgress({ current: i + 1, total: files.length, fileName: file.name });
+      
+      try {
+        console.log(`[MainPage] Processing file ${i + 1}/${files.length}: ${file.name}`);
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const response = await fetch('/api/analyze-receipt', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+          console.error(`[MainPage] Server error for ${file.name}:`, result);
+          errors.push(`${file.name}: ${result.error || 'Upload failed'}`);
+          continue;
+        }
+        
+        if (result.success && result.data) {
+          const newReceipt: ReceiptEntry = {
+            id: `${Date.now()}-${i}`,
+            data: result.data,
+            timestamp: new Date()
+          };
+          newReceipts.push(newReceipt);
+          console.log(`[MainPage] Successfully processed ${file.name}`);
+        } else {
+          console.error(`[MainPage] Processing failed for ${file.name}:`, result);
+          errors.push(`${file.name}: ${result.error || 'Processing failed'}`);
+        }
+      } catch (err) {
+        console.error(`[MainPage] Error processing ${file.name}:`, err);
+        errors.push(`${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      }
+    }
+
+    // Add all successful receipts to the list
+    if (newReceipts.length > 0) {
+      setReceipts(prev => [...newReceipts, ...prev]);
+    }
+
+    // Show errors if any
+    if (errors.length > 0) {
+      setError({
+        message: `${errors.length} file(s) failed to process`,
+        details: errors.join('\n')
+      });
+    }
+
+    setUploadProgress(null);
+    setIsUploading(false);
+    
+    console.log(`[MainPage] Batch processing complete. Processed ${newReceipts.length}/${files.length} files successfully.`);
+  };
 
   const handleFileSelect = async (file: File) => {
     setIsUploading(true);
@@ -259,18 +331,45 @@ export default function Home() {
         <div className="max-w-6xl mx-auto">
           <header className="text-center mb-8">
             <h1 className="text-4xl font-bold text-gray-800 mb-2">
-              Receipt Scanner MVP
+              Morgo Receipt Scanner MVP
             </h1>
             <p className="text-lg text-gray-600">
               Upload receipt images to extract data using AWS Textract
+            </p>
+            <p className="text-lg text-gray-600 bold mt-1">
+              Recommended: 10 images or less at a time.
             </p>
           </header>
 
         <div className="mb-8">
           <FileUpload 
             onFileSelect={handleFileSelect} 
+            onMultipleFilesSelect={handleMultipleFiles}
             isUploading={isUploading} 
           />
+          
+          {/* Upload Progress */}
+          {uploadProgress && (
+            <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-blue-800">
+                  Processing files: {uploadProgress.current} of {uploadProgress.total}
+                </span>
+                <span className="text-xs text-blue-600">
+                  {Math.round((uploadProgress.current / uploadProgress.total) * 100)}%
+                </span>
+              </div>
+              <div className="w-full bg-blue-200 rounded-full h-2 mb-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+                ></div>
+              </div>
+              <div className="text-xs text-blue-600">
+                Current: {uploadProgress.fileName}
+              </div>
+            </div>
+          )}
         </div>
 
         {error && (

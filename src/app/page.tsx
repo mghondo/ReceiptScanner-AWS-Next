@@ -30,7 +30,7 @@ export default function Home() {
   const [receipts, setReceipts] = useState<ReceiptEntry[]>([]);
   const [error, setError] = useState<ErrorDetails | null>(null);
   const [employeeName, setEmployeeName] = useState('');
-  const [generatedReport, setGeneratedReport] = useState<{csvContent: string, fileName: string} | null>(null);
+  const [generatedReport, setGeneratedReport] = useState<{excelBuffer: Buffer, fileName: string} | null>(null);
 
   const handleFileSelect = async (file: File) => {
     setIsUploading(true);
@@ -134,7 +134,9 @@ export default function Home() {
   const handleDownloadReport = () => {
     if (!generatedReport) return;
     
-    const blob = new Blob([generatedReport.csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([generatedReport.excelBuffer], { 
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+    });
     const url = URL.createObjectURL(blob);
     
     const link = document.createElement('a');
@@ -146,7 +148,7 @@ export default function Home() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
     
-    console.log('[MainPage] CSV download initiated');
+    console.log('[MainPage] Excel download initiated');
   };
 
   const removeReceipt = (receiptId: string) => {
@@ -180,10 +182,7 @@ export default function Home() {
     console.log('[MainPage] Receipts data:', receipts);
     
     try {
-      console.log('[MainPage] Attempting dynamic import of CSVProcessor');
-      // Dynamic import to avoid SSR issues
-      const { CSVProcessor } = await import('@/lib/csv-processor');
-      console.log('[MainPage] CSVProcessor imported successfully');
+      console.log('[MainPage] Preparing expense report data');
       
       const expenseReportData = {
         employeeName,
@@ -192,10 +191,25 @@ export default function Home() {
       };
       
       console.log('[MainPage] Expense report data prepared:', expenseReportData);
-      console.log('[MainPage] Starting CSV generation');
+      console.log('[MainPage] Calling API to generate Excel');
       
-      const csvContent = await CSVProcessor.processExpenseReport(expenseReportData);
-      console.log('[MainPage] CSV generated successfully, length:', csvContent.length);
+      // Call the API endpoint to generate the Excel file on the server
+      const response = await fetch('/api/generate-expense-report', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(expenseReportData),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.details || 'Failed to generate expense report');
+      }
+      
+      // Get the Excel buffer from the response
+      const excelBuffer = await response.arrayBuffer();
+      console.log('[MainPage] Excel received from API, size:', excelBuffer.byteLength);
       
       console.log('[MainPage] Storing generated report for UI display');
       const sanitizedName = employeeName.replace(/[^a-zA-Z0-9]/g, '_');
@@ -206,10 +220,10 @@ export default function Home() {
         month: '2-digit',
         day: '2-digit'
       }).replace(/\//g, '-');
-      const fileName = `expense_report_${sanitizedName}_${easternTime}.csv`;
+      const fileName = `expense_report_${sanitizedName}_${easternTime}.xlsx`;
       
       setGeneratedReport({
-        csvContent,
+        excelBuffer: Buffer.from(excelBuffer),
         fileName
       });
       
@@ -361,9 +375,9 @@ export default function Home() {
                           <svg className="w-8 h-8 text-green-600" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
                           </svg>
-                          {/* CSV Badge */}
-                          <div className="absolute -top-1 -right-1 bg-green-600 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">
-                            CSV
+                          {/* Excel Badge */}
+                          <div className="absolute -top-1 -right-1 bg-green-600 text-white text-xs px-1 py-0.5 rounded-full font-bold">
+                            XLSX
                           </div>
                         </div>
                         <div>

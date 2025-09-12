@@ -13,6 +13,7 @@
     "@aws-sdk/client-textract": "^3.883.0",
     "@types/image-size": "^0.7.0",
     "@types/uuid": "^10.0.0",
+    "exceljs": "^4.4.0",
     "heic2any": "^0.0.4",
     "image-size": "^2.0.2",
     "next": "15.5.2",

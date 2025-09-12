@@ -16,6 +16,7 @@
     "exceljs": "^4.4.0",
     "heic2any": "^0.0.4",
     "image-size": "^2.0.2",
+    "jspdf": "^3.0.2",
     "next": "15.5.2",
     "react": "19.1.0",
     "react-dom": "19.1.0",

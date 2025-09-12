@@ -4,6 +4,7 @@ import { useState } from 'react';
 import FileUpload from '@/components/FileUpload';
 import ReceiptTable from '@/components/ReceiptTable';
 import { ExtractedReceiptData } from '@/lib/textract-service';
+import { PDFGenerator } from '@/lib/pdf-generator';
 
 interface ErrorDetails {
   message: string;
@@ -23,6 +24,10 @@ interface ReceiptEntry {
   id: string;
   data: ExtractedReceiptData;
   timestamp: Date;
+  originalImage?: {
+    file: File;
+    dataUrl: string;
+  };
 }
 
 export default function Home() {
@@ -69,10 +74,21 @@ export default function Home() {
         }
         
         if (result.success && result.data) {
+          // Create image data URL for PDF generation
+          const imageDataUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target?.result as string);
+            reader.readAsDataURL(file);
+          });
+          
           const newReceipt: ReceiptEntry = {
             id: `${Date.now()}-${i}`,
             data: result.data,
-            timestamp: new Date()
+            timestamp: new Date(),
+            originalImage: {
+              file: file,
+              dataUrl: imageDataUrl
+            }
           };
           newReceipts.push(newReceipt);
           console.log(`[MainPage] Successfully processed ${file.name}`);
@@ -151,11 +167,22 @@ export default function Home() {
         return;
       }
 
+      // Create image data URL for PDF generation
+      const imageDataUrl = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target?.result as string);
+        reader.readAsDataURL(file);
+      });
+      
       // Add new receipt to the list (newest at top)
       const newReceipt: ReceiptEntry = {
         id: Date.now().toString(),
         data: result.data,
-        timestamp: new Date()
+        timestamp: new Date(),
+        originalImage: {
+          file: file,
+          dataUrl: imageDataUrl
+        }
       };
       setReceipts(prev => [newReceipt, ...prev]);
     } catch (err) {
@@ -227,6 +254,28 @@ export default function Home() {
     URL.revokeObjectURL(url);
     
     console.log('[MainPage] Excel download initiated');
+  };
+
+  const handleDownloadReceiptsPDF = async () => {
+    if (receipts.length === 0 || !employeeName.trim()) return;
+    
+    console.log('[MainPage] Generating receipts PDF...');
+    
+    try {
+      const pdfBlob = await PDFGenerator.generateReceiptsPDF({
+        employeeName,
+        receipts
+      });
+      
+      PDFGenerator.downloadPDF(pdfBlob, employeeName);
+      console.log('[MainPage] Receipts PDF download initiated');
+    } catch (error) {
+      console.error('[MainPage] Error generating receipts PDF:', error);
+      setError({
+        message: 'Failed to generate receipts PDF',
+        details: error instanceof Error ? error.message : 'Unknown error occurred'
+      });
+    }
   };
 
   const removeReceipt = (receiptId: string) => {
@@ -513,7 +562,19 @@ export default function Home() {
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
-                        <span>Download</span>
+                        <span>Download Excel</span>
+                      </button>
+                      
+                      {/* Download PDF Button */}
+                      <button
+                        onClick={handleDownloadReceiptsPDF}
+                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
+                        title="Download all receipt images as PDF"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        <span>Download PDF of Receipts</span>
                       </button>
                     </div>
                   )}
@@ -546,7 +607,19 @@ export default function Home() {
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
-                        <span>Download Old</span>
+                        <span>Download Old Excel</span>
+                      </button>
+                      
+                      {/* Download PDF Button */}
+                      <button
+                        onClick={handleDownloadReceiptsPDF}
+                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
+                        title="Download all receipt images as PDF"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        <span>Download PDF of Receipts</span>
                       </button>
                     </div>
                   )}

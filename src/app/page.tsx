@@ -383,7 +383,7 @@ export default function Home() {
               Morgo Receipt Scanner MVP
             </h1>
             <p className="text-lg text-gray-600">
-              Upload receipt images to extract data using AWS Textract
+              Upload receipt images to extract data.
             </p>
             <p className="text-lg text-gray-600 bold mt-1">
               Recommended: 10 images or less at a time.
@@ -654,7 +654,7 @@ export default function Home() {
               </li>
               <li className="flex items-start">
                 <span className="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold mr-3 mt-0.5">2</span>
-                AWS Textract extracts merchant, date, total, and items
+                Morgo grabs what you need in your expense report.
               </li>
               <li className="flex items-start">
                 <span className="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold mr-3 mt-0.5">3</span>
@@ -662,7 +662,7 @@ export default function Home() {
               </li>
               <li className="flex items-start">
                 <span className="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold mr-3 mt-0.5">4</span>
-                Export the data as JSON
+                Export the data as Excel and/or PDF of receipts.
               </li>
             </ol>
           </div>

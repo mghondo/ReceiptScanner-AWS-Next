@@ -29,6 +29,8 @@ export default function Home() {
   const [isUploading, setIsUploading] = useState(false);
   const [receipts, setReceipts] = useState<ReceiptEntry[]>([]);
   const [error, setError] = useState<ErrorDetails | null>(null);
+  const [employeeName, setEmployeeName] = useState('');
+  const [generatedReport, setGeneratedReport] = useState<{csvContent: string, fileName: string} | null>(null);
 
   const handleFileSelect = async (file: File) => {
     setIsUploading(true);
@@ -126,6 +128,25 @@ export default function Home() {
   const resetApp = () => {
     setReceipts([]);
     setError(null);
+    setGeneratedReport(null);
+  };
+
+  const handleDownloadReport = () => {
+    if (!generatedReport) return;
+    
+    const blob = new Blob([generatedReport.csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = generatedReport.fileName;
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    console.log('[MainPage] CSV download initiated');
   };
 
   const removeReceipt = (receiptId: string) => {
@@ -134,12 +155,14 @@ export default function Home() {
 
   // Check if all receipts have required fields completed
   const areAllReceiptsComplete = () => {
-    return receipts.length > 0 && receipts.every(receipt => 
-      receipt.data.description && 
-      receipt.data.description.trim() !== '' &&
-      receipt.data.category && 
-      receipt.data.category.trim() !== ''
-    );
+    return receipts.length > 0 && 
+           employeeName.trim() !== '' &&
+           receipts.every(receipt => 
+             receipt.data.description && 
+             receipt.data.description.trim() !== '' &&
+             receipt.data.category && 
+             receipt.data.category.trim() !== ''
+           );
   };
 
   // Calculate total of all receipts
@@ -150,9 +173,56 @@ export default function Home() {
     }, 0);
   };
 
-  const handleProcessExpenseReport = () => {
-    console.log('Processing expense report...');
-    // TODO: Implement CSV generation logic
+  const handleProcessExpenseReport = async () => {
+    console.log('[MainPage] Processing expense report...');
+    console.log('[MainPage] Employee name:', employeeName);
+    console.log('[MainPage] Receipts count:', receipts.length);
+    console.log('[MainPage] Receipts data:', receipts);
+    
+    try {
+      console.log('[MainPage] Attempting dynamic import of CSVProcessor');
+      // Dynamic import to avoid SSR issues
+      const { CSVProcessor } = await import('@/lib/csv-processor');
+      console.log('[MainPage] CSVProcessor imported successfully');
+      
+      const expenseReportData = {
+        employeeName,
+        receipts,
+        weekEndingDate: new Date().toLocaleDateString('en-US') // Current date as week ending
+      };
+      
+      console.log('[MainPage] Expense report data prepared:', expenseReportData);
+      console.log('[MainPage] Starting CSV generation');
+      
+      const csvContent = await CSVProcessor.processExpenseReport(expenseReportData);
+      console.log('[MainPage] CSV generated successfully, length:', csvContent.length);
+      
+      console.log('[MainPage] Storing generated report for UI display');
+      const sanitizedName = employeeName.replace(/[^a-zA-Z0-9]/g, '_');
+      // Use US Eastern time for filename
+      const easternTime = new Date().toLocaleDateString('en-US', {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).replace(/\//g, '-');
+      const fileName = `expense_report_${sanitizedName}_${easternTime}.csv`;
+      
+      setGeneratedReport({
+        csvContent,
+        fileName
+      });
+      
+      console.log('[MainPage] Report generation completed and stored');
+      
+    } catch (error) {
+      console.error('[MainPage] Error processing expense report:', error);
+      console.error('[MainPage] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+      setError({
+        message: 'Failed to generate expense report',
+        details: error instanceof Error ? error.message : 'Unknown error occurred'
+      });
+    }
   };
 
   return (
@@ -244,6 +314,24 @@ export default function Home() {
                 </button>
               </div>
             </div>
+
+            {/* Employee Name Input */}
+            <div className="bg-white rounded-lg shadow-lg p-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Employee Name <span className="text-amber-600 font-bold">*</span>
+              </label>
+              <input
+                type="text"
+                value={employeeName}
+                onChange={(e) => setEmployeeName(e.target.value)}
+                className={`w-full max-w-md p-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 ${
+                  !employeeName.trim() 
+                    ? 'border-amber-400 bg-amber-50' 
+                    : 'border-gray-300'
+                }`}
+                placeholder="Enter employee name for expense report"
+              />
+            </div>
             
             <ReceiptTable
               receipts={receipts}
@@ -254,14 +342,47 @@ export default function Home() {
             {/* Total and Process Button Section */}
             <div className="mt-6 bg-white rounded-lg shadow-lg p-6">
               <div className="flex justify-between items-center">
-                <div>
-                  {areAllReceiptsComplete() && (
+                <div className="flex items-center space-x-4">
+                  {areAllReceiptsComplete() && !generatedReport && (
                     <button
                       onClick={handleProcessExpenseReport}
                       className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
                     >
                       Process Expense Report
                     </button>
+                  )}
+                  
+                  {generatedReport && (
+                    <div className="flex items-center space-x-4">
+                      {/* Creative File Icon */}
+                      <div className="flex items-center space-x-3 bg-green-50 px-4 py-3 rounded-lg border border-green-200">
+                        <div className="relative">
+                          {/* File Icon with CSV Badge */}
+                          <svg className="w-8 h-8 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                          </svg>
+                          {/* CSV Badge */}
+                          <div className="absolute -top-1 -right-1 bg-green-600 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">
+                            CSV
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-green-800">Expense Report Generated</p>
+                          <p className="text-xs text-green-600">{generatedReport.fileName}</p>
+                        </div>
+                      </div>
+                      
+                      {/* Download Button */}
+                      <button
+                        onClick={handleDownloadReport}
+                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span>Download</span>
+                      </button>
+                    </div>
                   )}
                 </div>
                 
@@ -276,7 +397,7 @@ export default function Home() {
               {!areAllReceiptsComplete() && receipts.length > 0 && (
                 <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded">
                   <p className="text-sm text-amber-700">
-                    <span className="font-medium">Complete all required fields</span> (Purpose and Category) to process the expense report.
+                    <span className="font-medium">Complete all required fields</span> (Employee Name, Purpose, and Category) to process the expense report.
                   </p>
                 </div>
               )}

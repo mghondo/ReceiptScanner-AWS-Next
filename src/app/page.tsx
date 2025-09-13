@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import FileUpload from '@/components/FileUpload';
 import ReceiptTable from '@/components/ReceiptTable';
 import { ExtractedReceiptData } from '@/lib/textract-service';
@@ -38,6 +38,8 @@ export default function Home() {
   const [generatedReport, setGeneratedReport] = useState<{excelBuffer: Buffer, fileName: string} | null>(null);
   const [hasEditsAfterGeneration, setHasEditsAfterGeneration] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number; fileName: string } | null>(null);
+  const [isProcessingReport, setIsProcessingReport] = useState(false);
+  const [jumbotronImage, setJumbotronImage] = useState<string>('');
 
   const handleMultipleFiles = async (files: File[]) => {
     setIsUploading(true);
@@ -236,6 +238,27 @@ export default function Home() {
     setGeneratedReport(null);
   };
 
+  // Randomly select jumbotron image on mount
+  useEffect(() => {
+    const images = [
+      '/Sora_50_45_PM.png',
+      '/Sora_50_57_PM.png',
+      '/Sora_54_05_PM.png',
+      '/Sora_54_16_PM.png',
+      '/Sora_54_35_PM.png'
+    ];
+    const randomImage = images[Math.floor(Math.random() * images.length)];
+    console.log('Selected jumbotron image:', randomImage);
+    console.log('Setting jumbotron image state to:', randomImage);
+    setJumbotronImage(randomImage);
+    
+    // Debug: Check if image loads
+    const img = new Image();
+    img.onload = () => console.log('Image loaded successfully:', randomImage);
+    img.onerror = (e) => console.error('Image failed to load:', randomImage, e);
+    img.src = randomImage;
+  }, []);
+
   const handleDownloadReport = () => {
     if (!generatedReport) return;
     
@@ -313,6 +336,8 @@ export default function Home() {
     console.log('[MainPage] Receipts count:', receipts.length);
     console.log('[MainPage] Receipts data:', receipts);
     
+    setIsProcessingReport(true);
+    
     try {
       console.log('[MainPage] Preparing expense report data');
       
@@ -371,27 +396,47 @@ export default function Home() {
         message: 'Failed to generate expense report',
         details: error instanceof Error ? error.message : 'Unknown error occurred'
       });
+    } finally {
+      setIsProcessingReport(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <div className="flex-1 py-8 px-4">
-        <div className="max-w-6xl mx-auto">
-          <header className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-gray-800 mb-2">
-              Morgo Receipt Scanner MVP
+      {/* Jumbotron with Sora image */}
+      <div 
+        className="relative h-[400px] w-full"
+        style={{
+          backgroundImage: jumbotronImage ? `url('${jumbotronImage}')` : '',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          backgroundColor: '#1f2937'
+        }}
+      >
+        {/* Semi-transparent overlay for text readability */}
+        <div className="absolute inset-0 bg-black/40" />
+        
+        {/* Content */}
+        <div className="relative z-10 h-full flex flex-col items-center justify-center px-4">
+          <div className="max-w-6xl mx-auto text-center">
+            <h1 className="text-5xl font-bold text-white mb-4">
+              OGS Receipt Scanner MVP
             </h1>
-            <p className="text-lg text-gray-600">
+            <p className="text-xl text-white mb-2">
               Upload receipt images to extract data.
             </p>
-            <p className="text-lg text-gray-600 bold mt-1">
+            <p className="text-xl text-white font-semibold">
               Recommended: 10 images or less at a time.
             </p>
-          </header>
+          </div>
+        </div>
+      </div>
 
-        <div className="mb-8">
-          <FileUpload 
+      <div className="flex-1 py-8 px-4">
+        <div className="max-w-6xl mx-auto">
+          <div className="mb-8">
+            <FileUpload 
             onFileSelect={handleFileSelect} 
             onMultipleFilesSelect={handleMultipleFiles}
             isUploading={isUploading} 
@@ -522,20 +567,30 @@ export default function Home() {
             />
 
             {/* Total and Process Button Section */}
-            <div className="mt-6 bg-white rounded-lg shadow-lg p-6">
-              <div className="flex justify-between items-center">
+            <div className="mt-6 bg-white rounded-lg shadow-lg p-6 border-2 border-gray-300">
+              <div className="flex flex-col md:flex-row md:justify-between md:items-center space-y-4 md:space-y-0">
                 <div className="flex items-center space-x-4">
                   {areAllReceiptsComplete() && (!generatedReport || hasEditsAfterGeneration) && (
-                    <button
-                      onClick={handleProcessExpenseReport}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-                    >
-                      {hasEditsAfterGeneration ? 'Re-Process Expense Report' : 'Process Expense Report'}
-                    </button>
+                    isProcessingReport ? (
+                      <div className="flex items-center justify-center px-6 py-3">
+                        <svg className="animate-spin h-6 w-6 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span className="ml-2 text-gray-600 font-medium">Processing...</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={handleProcessExpenseReport}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                      >
+                        {hasEditsAfterGeneration ? 'Re-Process Expense Report' : 'Process Expense Report'}
+                      </button>
+                    )
                   )}
                   
                   {generatedReport && !hasEditsAfterGeneration && (
-                    <div className="flex items-center space-x-4">
+                    <div className="flex flex-col md:flex-row items-start md:items-center space-y-3 md:space-y-0 md:space-x-4 w-full">
                       {/* Creative File Icon */}
                       <div className="flex items-center space-x-3 bg-green-50 px-4 py-3 rounded-lg border border-green-200">
                         <div className="relative">
@@ -554,33 +609,36 @@ export default function Home() {
                         </div>
                       </div>
                       
-                      {/* Download Button */}
-                      <button
-                        onClick={handleDownloadReport}
-                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        <span>Download Excel</span>
-                      </button>
-                      
-                      {/* Download PDF Button */}
-                      <button
-                        onClick={handleDownloadReceiptsPDF}
-                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
-                        title="Download all receipt images as PDF"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                        </svg>
-                        <span>Download PDF of Receipts</span>
-                      </button>
+                      {/* Download Buttons Container */}
+                      <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2 w-full md:w-auto">
+                        {/* Download Excel Button */}
+                        <button
+                          onClick={handleDownloadReport}
+                          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2 w-full md:w-auto"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <span>Download Excel</span>
+                        </button>
+                        
+                        {/* Download PDF Button */}
+                        <button
+                          onClick={handleDownloadReceiptsPDF}
+                          className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2 w-full md:w-auto"
+                          title="Download all receipt images as PDF"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                          </svg>
+                          <span>Download PDF of Receipts</span>
+                        </button>
+                      </div>
                     </div>
                   )}
                   
                   {generatedReport && hasEditsAfterGeneration && (
-                    <div className="flex items-center space-x-4">
+                    <div className="flex flex-col md:flex-row items-start md:items-center space-y-3 md:space-y-0 md:space-x-4 w-full">
                       {/* Modified File Icon */}
                       <div className="flex items-center space-x-3 bg-amber-50 px-4 py-3 rounded-lg border border-amber-200">
                         <div className="relative">
@@ -598,34 +656,37 @@ export default function Home() {
                         </div>
                       </div>
                       
-                      {/* Download Previous Button */}
-                      <button
-                        onClick={handleDownloadReport}
-                        className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
-                        title="Download previous version (before edits)"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        <span>Download Old Excel</span>
-                      </button>
-                      
-                      {/* Download PDF Button */}
-                      <button
-                        onClick={handleDownloadReceiptsPDF}
-                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
-                        title="Download all receipt images as PDF"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                        </svg>
-                        <span>Download PDF of Receipts</span>
-                      </button>
+                      {/* Download Buttons Container */}
+                      <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2 w-full md:w-auto">
+                        {/* Download Previous Button */}
+                        <button
+                          onClick={handleDownloadReport}
+                          className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2 w-full md:w-auto"
+                          title="Download previous version (before edits)"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <span>Download Old Excel</span>
+                        </button>
+                        
+                        {/* Download PDF Button */}
+                        <button
+                          onClick={handleDownloadReceiptsPDF}
+                          className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2 w-full md:w-auto"
+                          title="Download all receipt images as PDF"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                          </svg>
+                          <span>Download PDF of Receipts</span>
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
                 
-                <div className="text-right">
+                <div className="text-center md:text-right mt-4 md:mt-0 pt-4 md:pt-0 border-t md:border-t-0">
                   <p className="text-sm text-gray-600">Total Expenses</p>
                   <p className="text-2xl font-bold text-gray-900">
                     ${calculateTotal().toFixed(2)}

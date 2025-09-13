@@ -199,10 +199,13 @@ export default function FileUpload({ onFileSelect, onMultipleFilesSelect, isUplo
       <div
         {...getRootProps()}
         className={`
-          border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors
-          ${isDragActive ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}
+          border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all bg-white shadow-xl
+          ${isDragActive ? 'border-blue-400 bg-blue-50 shadow-2xl' : 'border-gray-300 hover:border-gray-400 hover:shadow-2xl'}
           ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}
         `}
+        style={{
+          boxShadow: '10px 10px 30px rgba(0, 0, 0, 0.25)'
+        }}
       >
         <input {...getInputProps()} disabled={isUploading || conversionStatus.isConverting} />
         

@@ -32,3 +32,28 @@ svg[class*="paused"],
 .__next_dev_only__ {
   display: none !important;
 }
+
+/* Jumbotron sliding animations */
+@keyframes slowSlideUp {
+  0% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-20%);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+@keyframes slowSlideDown {
+  0% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(20%);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}

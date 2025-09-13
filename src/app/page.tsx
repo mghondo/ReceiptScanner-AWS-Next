@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import FileUpload from '@/components/FileUpload';
 import ReceiptTable from '@/components/ReceiptTable';
+import MileageEntry from '@/components/MileageEntry';
+import MileageList from '@/components/MileageList';
 import { ExtractedReceiptData } from '@/lib/textract-service';
 import { PDFGenerator } from '@/lib/pdf-generator';
 
@@ -30,7 +32,22 @@ interface ReceiptEntry {
   };
 }
 
+interface MileageEntryData {
+  id: string;
+  date: string;
+  startAddress: string;
+  endAddress: string;
+  businessPurpose: string;
+  roundTrip: boolean;
+  personalCommute: number;
+  calculatedDistance: number;
+  reimbursableDistance: number;
+  reimbursableAmount: number;
+  createdAt: Date;
+}
+
 export default function Home() {
+  const [activeTab, setActiveTab] = useState<'receipts' | 'mileage'>('receipts');
   const [isUploading, setIsUploading] = useState(false);
   const [receipts, setReceipts] = useState<ReceiptEntry[]>([]);
   const [error, setError] = useState<ErrorDetails | null>(null);
@@ -40,6 +57,11 @@ export default function Home() {
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number; fileName: string } | null>(null);
   const [isProcessingReport, setIsProcessingReport] = useState(false);
   const [jumbotronImage, setJumbotronImage] = useState<string>('');
+  const [slideDirection, setSlideDirection] = useState<'up' | 'down'>('up');
+  
+  // Mileage-related state
+  const [mileageEntries, setMileageEntries] = useState<MileageEntryData[]>([]);
+  const [isCalculatingMileage, setIsCalculatingMileage] = useState(false);
 
   const handleMultipleFiles = async (files: File[]) => {
     setIsUploading(true);
@@ -238,7 +260,7 @@ export default function Home() {
     setGeneratedReport(null);
   };
 
-  // Randomly select jumbotron image on mount
+  // Randomly select jumbotron image and slide direction on mount
   useEffect(() => {
     const images = [
       '/Sora_50_45_PM.png',
@@ -248,9 +270,12 @@ export default function Home() {
       '/Sora_54_35_PM.png'
     ];
     const randomImage = images[Math.floor(Math.random() * images.length)];
+    const randomDirection = Math.random() < 0.5 ? 'up' : 'down';
+    
     console.log('Selected jumbotron image:', randomImage);
-    console.log('Setting jumbotron image state to:', randomImage);
+    console.log('Selected slide direction:', randomDirection);
     setJumbotronImage(randomImage);
+    setSlideDirection(randomDirection);
     
     // Debug: Check if image loads
     const img = new Image();
@@ -401,19 +426,101 @@ export default function Home() {
     }
   };
 
+  // Mileage-related functions
+  const loadMileageEntries = async () => {
+    try {
+      const response = await fetch('/api/mileage/entries');
+      if (!response.ok) throw new Error('Failed to load mileage entries');
+      
+      const result = await response.json();
+      setMileageEntries(result.entries || []);
+    } catch (error) {
+      console.error('Error loading mileage entries:', error);
+    }
+  };
+
+  const handleSaveMileageEntry = async (entryData: Omit<MileageEntryData, 'id' | 'createdAt'>) => {
+    try {
+      const response = await fetch('/api/mileage/entries', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(entryData),
+      });
+
+      if (!response.ok) throw new Error('Failed to save mileage entry');
+      
+      const result = await response.json();
+      console.log('Mileage entry saved:', result);
+      
+      // Reload entries to get the latest data
+      await loadMileageEntries();
+      
+    } catch (error) {
+      console.error('Error saving mileage entry:', error);
+      setError({
+        message: 'Failed to save mileage entry',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  const handleRemoveMileageEntry = async (entryId: string) => {
+    try {
+      const response = await fetch(`/api/mileage/entries?id=${entryId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) throw new Error('Failed to remove mileage entry');
+      
+      // Reload entries to get the latest data
+      await loadMileageEntries();
+      
+    } catch (error) {
+      console.error('Error removing mileage entry:', error);
+      setError({
+        message: 'Failed to remove mileage entry',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  const handleExportMileage = () => {
+    // For now, just show an alert - can be implemented later
+    alert('Mileage export functionality coming soon!');
+  };
+
+  // Load mileage entries on component mount or tab switch to mileage
+  useEffect(() => {
+    if (activeTab === 'mileage') {
+      loadMileageEntries();
+    }
+  }, [activeTab]);
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Jumbotron with Sora image */}
       <div 
-        className="relative h-[400px] w-full"
+        className="relative h-[400px] w-full overflow-hidden"
         style={{
-          backgroundImage: jumbotronImage ? `url('${jumbotronImage}')` : '',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
           backgroundColor: '#1f2937'
         }}
       >
+        <div
+          className="absolute w-full"
+          style={{
+            backgroundImage: jumbotronImage ? `url('${jumbotronImage}')` : '',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            height: '120%',
+            top: slideDirection === 'down' ? '-20%' : '0',
+            animation: slideDirection === 'up' 
+              ? 'slowSlideUp 12s linear infinite' 
+              : 'slowSlideDown 12s linear infinite'
+          }}
+        />
         {/* Semi-transparent overlay for text readability */}
         <div className="absolute inset-0 bg-black/40" />
         
@@ -435,90 +542,121 @@ export default function Home() {
 
       <div className="flex-1 py-8 px-4">
         <div className="max-w-6xl mx-auto">
+          {/* Navigation Tabs */}
           <div className="mb-8">
-            <FileUpload 
-            onFileSelect={handleFileSelect} 
-            onMultipleFilesSelect={handleMultipleFiles}
-            isUploading={isUploading} 
-          />
-          
-          {/* Upload Progress */}
-          {uploadProgress && (
-            <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-blue-800">
-                  Processing files: {uploadProgress.current} of {uploadProgress.total}
-                </span>
-                <span className="text-xs text-blue-600">
-                  {Math.round((uploadProgress.current / uploadProgress.total) * 100)}%
-                </span>
-              </div>
-              <div className="w-full bg-blue-200 rounded-full h-2 mb-2">
-                <div 
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
-                ></div>
-              </div>
-              <div className="text-xs text-blue-600">
-                Current: {uploadProgress.fileName}
-              </div>
+            <div className="border-b border-gray-200">
+              <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+                <button
+                  onClick={() => setActiveTab('receipts')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'receipts'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Receipts
+                </button>
+                <button
+                  onClick={() => setActiveTab('mileage')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'mileage'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Mileage
+                </button>
+              </nav>
             </div>
-          )}
-        </div>
-
-        {error && (
-          <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
-            <h3 className="font-semibold mb-1">Error</h3>
-            <p className="mb-2">{error.message}</p>
-            
-            {error.validationErrors && error.validationErrors.length > 0 && (
-              <div className="mt-3 p-3 bg-red-50 rounded">
-                <p className="font-semibold text-sm mb-2">Validation Errors:</p>
-                <ul className="list-disc list-inside text-sm space-y-1">
-                  {error.validationErrors.map((err, index) => (
-                    <li key={index}>{err}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            
-            {error.validationWarnings && error.validationWarnings.length > 0 && (
-              <div className="mt-3 p-3 bg-yellow-50 rounded">
-                <p className="font-semibold text-sm mb-2">Warnings:</p>
-                <ul className="list-disc list-inside text-sm space-y-1">
-                  {error.validationWarnings.map((warning, index) => (
-                    <li key={index}>{warning}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            
-            {error.details && (
-              <div className="mt-3 p-3 bg-gray-50 rounded">
-                <p className="font-semibold text-sm mb-1">Details:</p>
-                <p className="text-sm">{error.details}</p>
-              </div>
-            )}
-            
-            {error.metadata && (
-              <div className="mt-3 p-3 bg-gray-50 rounded">
-                <p className="font-semibold text-sm mb-1">Image Information:</p>
-                <div className="text-sm space-y-1">
-                  {error.metadata.format && <p>Format: {error.metadata.format}</p>}
-                  {error.metadata.width && <p>Dimensions: {error.metadata.width}x{error.metadata.height}px</p>}
-                  {error.metadata.size && <p>Size: {(error.metadata.size / 1024 / 1024).toFixed(2)}MB</p>}
-                </div>
-              </div>
-            )}
-            
-            <button
-              onClick={resetApp}
-              className="mt-3 text-sm underline hover:no-underline"
-            >
-              Try again with a different image
-            </button>
           </div>
-        )}
+
+          {/* Tab Content */}
+          {activeTab === 'receipts' && (
+            <div>
+              <div className="mb-8">
+                <FileUpload 
+                  onFileSelect={handleFileSelect} 
+                  onMultipleFilesSelect={handleMultipleFiles}
+                  isUploading={isUploading} 
+                />
+                
+                {/* Upload Progress */}
+                {uploadProgress && (
+                  <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-blue-800">
+                        Processing files: {uploadProgress.current} of {uploadProgress.total}
+                      </span>
+                      <span className="text-xs text-blue-600">
+                        {Math.round((uploadProgress.current / uploadProgress.total) * 100)}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-blue-200 rounded-full h-2 mb-2">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+                      ></div>
+                    </div>
+                    <div className="text-xs text-blue-600">
+                      Current: {uploadProgress.fileName}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {error && (
+                <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+                  <h3 className="font-semibold mb-1">Error</h3>
+                  <p className="mb-2">{error.message}</p>
+                  
+                  {error.validationErrors && error.validationErrors.length > 0 && (
+                    <div className="mt-3 p-3 bg-red-50 rounded">
+                      <p className="font-semibold text-sm mb-2">Validation Errors:</p>
+                      <ul className="list-disc list-inside text-sm space-y-1">
+                        {error.validationErrors.map((err, index) => (
+                          <li key={index}>{err}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  
+                  {error.validationWarnings && error.validationWarnings.length > 0 && (
+                    <div className="mt-3 p-3 bg-yellow-50 rounded">
+                      <p className="font-semibold text-sm mb-2">Warnings:</p>
+                      <ul className="list-disc list-inside text-sm space-y-1">
+                        {error.validationWarnings.map((warning, index) => (
+                          <li key={index}>{warning}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  
+                  {error.details && (
+                    <div className="mt-3 p-3 bg-gray-50 rounded">
+                      <p className="font-semibold text-sm mb-1">Details:</p>
+                      <p className="text-sm">{error.details}</p>
+                    </div>
+                  )}
+                  
+                  {error.metadata && (
+                    <div className="mt-3 p-3 bg-gray-50 rounded">
+                      <p className="font-semibold text-sm mb-1">Image Information:</p>
+                      <div className="text-sm space-y-1">
+                        {error.metadata.format && <p>Format: {error.metadata.format}</p>}
+                        {error.metadata.width && <p>Dimensions: {error.metadata.width}x{error.metadata.height}px</p>}
+                        {error.metadata.size && <p>Size: {(error.metadata.size / 1024 / 1024).toFixed(2)}MB</p>}
+                      </div>
+                    </div>
+                  )}
+                  
+                  <button
+                    onClick={resetApp}
+                    className="mt-3 text-sm underline hover:no-underline"
+                  >
+                    Try again with a different image
+                  </button>
+                </div>
+              )}
 
         {receipts.length > 0 && (
           <div className="space-y-6">
@@ -728,6 +866,24 @@ export default function Home() {
             </ol>
           </div>
         )}
+          </div>
+          )}
+
+          {/* Mileage Tab Content */}
+          {activeTab === 'mileage' && (
+            <div>
+              <MileageEntry 
+                onSave={handleSaveMileageEntry}
+                isCalculating={isCalculatingMileage}
+              />
+              
+              <MileageList
+                entries={mileageEntries}
+                onRemoveEntry={handleRemoveMileageEntry}
+                onExport={handleExportMileage}
+              />
+            </div>
+          )}
         </div>
       </div>
       

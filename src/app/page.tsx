@@ -356,32 +356,32 @@ export default function Home() {
   };
 
   const handleProcessExpenseReport = async () => {
+    if (!employeeName) {
+      alert('Please enter your employee name before processing the report.');
+      return;
+    }
+    
     console.log('[MainPage] Processing expense report...');
     console.log('[MainPage] Employee name:', employeeName);
     console.log('[MainPage] Receipts count:', receipts.length);
-    console.log('[MainPage] Receipts data:', receipts);
+    console.log('[MainPage] Mileage entries count:', mileageEntries.length);
     
     setIsProcessingReport(true);
     
     try {
-      console.log('[MainPage] Preparing expense report data');
+      console.log('[MainPage] Preparing complete expense report data');
       
-      const expenseReportData = {
-        employeeName,
-        receipts,
-        weekEndingDate: new Date().toLocaleDateString('en-US') // Current date as week ending
-      };
-      
-      console.log('[MainPage] Expense report data prepared:', expenseReportData);
-      console.log('[MainPage] Calling API to generate Excel');
-      
-      // Call the API endpoint to generate the Excel file on the server
-      const response = await fetch('/api/generate-expense-report', {
+      // Use the new unified export endpoint that handles both receipts and mileage
+      const response = await fetch('/api/export-complete-report', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(expenseReportData),
+        body: JSON.stringify({
+          receipts,
+          mileageEntries,
+          employeeName,
+        }),
       });
       
       if (!response.ok) {
@@ -426,77 +426,71 @@ export default function Home() {
     }
   };
 
-  // Mileage-related functions
-  const loadMileageEntries = async () => {
-    try {
-      const response = await fetch('/api/mileage/entries');
-      if (!response.ok) throw new Error('Failed to load mileage entries');
-      
-      const result = await response.json();
-      setMileageEntries(result.entries || []);
-    } catch (error) {
-      console.error('Error loading mileage entries:', error);
-    }
+  // Mileage-related functions - All client-side state (clears on refresh)
+  const handleSaveMileageEntry = (entryData: Omit<MileageEntryData, 'id' | 'createdAt'>) => {
+    // Create new entry with generated ID and timestamp
+    const newEntry: MileageEntryData = {
+      ...entryData,
+      id: `mileage_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      createdAt: new Date()
+    };
+
+    // Add to state (client-side only, will be cleared on page refresh)
+    setMileageEntries(prev => [newEntry, ...prev]);
+    
+    console.log('Mileage entry saved (client-side):', newEntry);
   };
 
-  const handleSaveMileageEntry = async (entryData: Omit<MileageEntryData, 'id' | 'createdAt'>) => {
+  const handleRemoveMileageEntry = (entryId: string) => {
+    // Remove from state (client-side only)
+    setMileageEntries(prev => prev.filter(entry => entry.id !== entryId));
+    console.log('Mileage entry removed (client-side):', entryId);
+  };
+
+  const handleExportMileage = async () => {
+    if (!employeeName) {
+      alert('Please enter your employee name before exporting.');
+      return;
+    }
+
     try {
-      const response = await fetch('/api/mileage/entries', {
+      // Export both receipts and mileage data together
+      const response = await fetch('/api/export-complete-report', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(entryData),
+        body: JSON.stringify({
+          receipts,
+          mileageEntries,
+          employeeName,
+        }),
       });
 
-      if (!response.ok) throw new Error('Failed to save mileage entry');
-      
-      const result = await response.json();
-      console.log('Mileage entry saved:', result);
-      
-      // Reload entries to get the latest data
-      await loadMileageEntries();
-      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to export report');
+      }
+
+      // Download the file
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const today = new Date().toISOString().split('T')[0];
+      link.download = `Expense Report - ${employeeName} - ${today}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Error saving mileage entry:', error);
-      setError({
-        message: 'Failed to save mileage entry',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      });
+      console.error('Export error:', error);
+      alert('Failed to export report: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 
-  const handleRemoveMileageEntry = async (entryId: string) => {
-    try {
-      const response = await fetch(`/api/mileage/entries?id=${entryId}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) throw new Error('Failed to remove mileage entry');
-      
-      // Reload entries to get the latest data
-      await loadMileageEntries();
-      
-    } catch (error) {
-      console.error('Error removing mileage entry:', error);
-      setError({
-        message: 'Failed to remove mileage entry',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      });
-    }
-  };
-
-  const handleExportMileage = () => {
-    // For now, just show an alert - can be implemented later
-    alert('Mileage export functionality coming soon!');
-  };
-
-  // Load mileage entries on component mount or tab switch to mileage
-  useEffect(() => {
-    if (activeTab === 'mileage') {
-      loadMileageEntries();
-    }
-  }, [activeTab]);
+  // No longer loading mileage entries from API - they're stored in client state only
+  // This means mileage entries will be cleared on page refresh, just like receipts
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -542,6 +536,23 @@ export default function Home() {
 
       <div className="flex-1 py-8 px-4">
         <div className="max-w-6xl mx-auto">
+          {/* Employee Name Field */}
+          <div className="mb-6 bg-white rounded-lg shadow-sm p-4">
+            <div className="flex items-center space-x-4">
+              <label htmlFor="employeeName" className="text-sm font-medium text-gray-700">
+                Employee Name:
+              </label>
+              <input
+                id="employeeName"
+                type="text"
+                value={employeeName}
+                onChange={(e) => setEmployeeName(e.target.value)}
+                placeholder="Enter your name"
+                className="flex-1 max-w-xs px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+              />
+            </div>
+          </div>
+
           {/* Navigation Tabs */}
           <div className="mb-8">
             <div className="border-b border-gray-200">
@@ -672,30 +683,6 @@ export default function Home() {
                   Clear All
                 </button>
               </div>
-            </div>
-
-            {/* Employee Name Input */}
-            <div className="bg-white rounded-lg shadow-lg p-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Employee Name <span className="text-amber-600 font-bold">*</span>
-              </label>
-              <input
-                type="text"
-                value={employeeName}
-                onChange={(e) => {
-                  setEmployeeName(e.target.value);
-                  // Mark that edits have been made after generation
-                  if (generatedReport) {
-                    setHasEditsAfterGeneration(true);
-                  }
-                }}
-                className={`w-full max-w-md p-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 ${
-                  !employeeName.trim() 
-                    ? 'border-amber-400 bg-amber-50' 
-                    : 'border-gray-300'
-                }`}
-                placeholder="Enter employee name for expense report"
-              />
             </div>
             
             <ReceiptTable
@@ -835,7 +822,7 @@ export default function Home() {
               {!areAllReceiptsComplete() && receipts.length > 0 && (
                 <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded">
                   <p className="text-sm text-amber-700">
-                    <span className="font-medium">Complete all required fields</span> (Employee Name, Purpose, and Category) to process the expense report.
+                    <span className="font-medium">Complete all required fields</span> (Purpose and Category) to process the expense report.
                   </p>
                 </div>
               )}

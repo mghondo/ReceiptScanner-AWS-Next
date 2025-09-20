@@ -18,10 +18,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const googleApiKey = process.env.GOOGLE_PLACES_API_KEY;
+    const googleApiKey = process.env.MYNEW_GOOGLE_PLACES_API_KEY;
     
     if (!googleApiKey) {
-      console.error('Missing GOOGLE_PLACES_API_KEY environment variable');
+      console.error('Missing MYNEW_GOOGLE_PLACES_API_KEY environment variable');
       return NextResponse.json(
         { error: 'Google Places API key not configured' },
         { status: 500 }

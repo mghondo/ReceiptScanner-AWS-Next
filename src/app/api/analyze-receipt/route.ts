@@ -7,10 +7,10 @@ export async function POST(request: NextRequest) {
   try {
     // Debug logging to check environment variables
     console.log('=== Environment Variables Debug ===');
-    console.log('AWS_ACCESS_KEY_ID:', process.env.AWS_ACCESS_KEY_ID ? 'Found' : 'Missing');
-    console.log('AWS_SECRET_ACCESS_KEY:', process.env.AWS_SECRET_ACCESS_KEY ? 'Found' : 'Missing');
-    console.log('AWS_REGION:', process.env.AWS_REGION);
-    console.log('AWS_S3_BUCKET_NAME:', process.env.AWS_S3_BUCKET_NAME);
+    console.log('MYNEW_AWS_ACCESS_KEY_ID:', process.env.MYNEW_AWS_ACCESS_KEY_ID ? 'Found' : 'Missing');
+    console.log('MYNEW_AWS_SECRET_ACCESS_KEY:', process.env.MYNEW_AWS_SECRET_ACCESS_KEY ? 'Found' : 'Missing');
+    console.log('MYNEW_AWS_REGION:', process.env.MYNEW_AWS_REGION);
+    console.log('MYNEW_AWS_S3_BUCKET_NAME:', process.env.MYNEW_AWS_S3_BUCKET_NAME);
     console.log('====================================');
 
     const formData = await request.formData();

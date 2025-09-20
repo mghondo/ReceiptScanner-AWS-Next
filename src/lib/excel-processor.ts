@@ -44,9 +44,10 @@ export class ExcelProcessor {
     
     try {
       // Load with options to handle merged cells properly
+      // @ts-expect-error - Buffer type mismatch between Node and ExcelJS types
       await workbook.xlsx.load(templateBuffer, {
         ignoreNodes: ['dataValidations'] // Ignore validations that might cause issues
-      } as any);
+      } as Parameters<typeof workbook.xlsx.load>[1]);
     } catch (loadError) {
       console.error('[ExcelProcessor] Error loading template, trying alternative approach:', loadError);
       // If normal loading fails, try reading as a buffer
@@ -227,7 +228,7 @@ export class ExcelProcessor {
   }
 
   static downloadExcel(excelBuffer: Buffer, employeeName: string): void {
-    const blob = new Blob([excelBuffer], { 
+    const blob = new Blob([new Uint8Array(excelBuffer)], { 
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
     });
     const url = URL.createObjectURL(blob);

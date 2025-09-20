@@ -8,7 +8,7 @@ export async function GET() {
     const templatePath = join(process.cwd(), '..', 'Expense Report.xlsx');
     const excelBuffer = readFileSync(templatePath);
     
-    return new NextResponse(excelBuffer, {
+    return new NextResponse(Buffer.from(excelBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

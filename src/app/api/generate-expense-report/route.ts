@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     console.log('[Generate Expense Report API] Excel generated successfully, size:', excelBuffer.length);
     
     // Return the Excel file as a response
-    return new NextResponse(excelBuffer, {
+    return new NextResponse(Buffer.from(excelBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

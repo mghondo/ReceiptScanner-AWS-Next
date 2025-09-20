@@ -264,7 +264,6 @@ export default function Home() {
   useEffect(() => {
     const images = [
       '/Sora_50_45_PM.png',
-      '/Sora_50_57_PM.png',
       '/Sora_54_05_PM.png',
       '/Sora_54_16_PM.png',
       '/Sora_54_35_PM.png'
@@ -287,7 +286,7 @@ export default function Home() {
   const handleDownloadReport = () => {
     if (!generatedReport) return;
     
-    const blob = new Blob([generatedReport.excelBuffer], { 
+    const blob = new Blob([new Uint8Array(generatedReport.excelBuffer)], { 
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
     });
     const url = URL.createObjectURL(blob);
@@ -427,12 +426,15 @@ export default function Home() {
   };
 
   // Mileage-related functions - All client-side state (clears on refresh)
-  const handleSaveMileageEntry = (entryData: Omit<MileageEntryData, 'id' | 'createdAt'>) => {
+  const handleSaveMileageEntry = (entryData: Omit<MileageEntryData, 'id' | 'createdAt'> & { calculatedDistance?: number; reimbursableDistance?: number; reimbursableAmount?: number }) => {
     // Create new entry with generated ID and timestamp
     const newEntry: MileageEntryData = {
       ...entryData,
       id: `mileage_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      createdAt: new Date()
+      createdAt: new Date(),
+      calculatedDistance: entryData.calculatedDistance || 0,
+      reimbursableDistance: entryData.reimbursableDistance || 0,
+      reimbursableAmount: entryData.reimbursableAmount || 0
     };
 
     // Add to state (client-side only, will be cleared on page refresh)
@@ -860,7 +862,8 @@ export default function Home() {
           {activeTab === 'mileage' && (
             <div>
               <MileageEntry 
-                onSave={handleSaveMileageEntry}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                onSave={handleSaveMileageEntry as any}
                 isCalculating={isCalculatingMileage}
               />
               

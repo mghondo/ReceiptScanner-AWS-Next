@@ -5,7 +5,13 @@ import { useState, useEffect, useRef } from 'react';
 // Extend Window interface to include Google Maps
 declare global {
   interface Window {
-    google: any;
+    google: {
+      maps: {
+        places: {
+          Autocomplete: unknown;
+        };
+      };
+    };
   }
 }
 
@@ -42,8 +48,8 @@ export default function MileageEntry({ onSave, isCalculating }: MileageEntryProp
   const [isFormValid, setIsFormValid] = useState(false);
   const startAddressRef = useRef<HTMLInputElement>(null);
   const endAddressRef = useRef<HTMLInputElement>(null);
-  const startAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
-  const endAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const startAutocompleteRef = useRef<unknown>(null);
+  const endAutocompleteRef = useRef<unknown>(null);
 
   // Update form validation whenever form data changes
   const validateForm = (data: MileageEntryData) => {
@@ -124,7 +130,8 @@ export default function MileageEntry({ onSave, isCalculating }: MileageEntryProp
       if (window.google && window.google.maps && window.google.maps.places) {
         // Initialize start address autocomplete
         if (startAddressRef.current && !startAutocompleteRef.current) {
-          startAutocompleteRef.current = new window.google.maps.places.Autocomplete(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          startAutocompleteRef.current = new (window.google.maps.places.Autocomplete as any)(
             startAddressRef.current,
             { 
               types: ['address'],
@@ -132,8 +139,10 @@ export default function MileageEntry({ onSave, isCalculating }: MileageEntryProp
             }
           );
           
-          startAutocompleteRef.current.addListener('place_changed', () => {
-            const place = startAutocompleteRef.current?.getPlace();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (startAutocompleteRef.current as any).addListener('place_changed', () => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const place = (startAutocompleteRef.current as any)?.getPlace();
             if (place && place.formatted_address) {
               setFormData(prevData => {
                 const newData = { ...prevData, startAddress: place.formatted_address };
@@ -146,7 +155,8 @@ export default function MileageEntry({ onSave, isCalculating }: MileageEntryProp
 
         // Initialize end address autocomplete
         if (endAddressRef.current && !endAutocompleteRef.current) {
-          endAutocompleteRef.current = new window.google.maps.places.Autocomplete(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          endAutocompleteRef.current = new (window.google.maps.places.Autocomplete as any)(
             endAddressRef.current,
             { 
               types: ['address'],
@@ -154,8 +164,10 @@ export default function MileageEntry({ onSave, isCalculating }: MileageEntryProp
             }
           );
           
-          endAutocompleteRef.current.addListener('place_changed', () => {
-            const place = endAutocompleteRef.current?.getPlace();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (endAutocompleteRef.current as any).addListener('place_changed', () => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const place = (endAutocompleteRef.current as any)?.getPlace();
             if (place && place.formatted_address) {
               setFormData(prevData => {
                 const newData = { ...prevData, endAddress: place.formatted_address };
@@ -185,7 +197,9 @@ export default function MileageEntry({ onSave, isCalculating }: MileageEntryProp
     }
 
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY || 'AIzaSyAwbwb4HGdofQSyunr_rSthv0sk00JmuOI'}&libraries=places&loading=async`;
+    // Use the MYNEW_ prefixed key, fallback to the regular one if needed
+    const apiKey = process.env.MYNEW_NEXT_PUBLIC_GOOGLE_PLACES_API_KEY || 'AIzaSyAwbwb4HGdofQSyunr_rSthv0sk00JmuOI';
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async`;
     script.async = true;
     script.defer = true;
     document.head.appendChild(script);

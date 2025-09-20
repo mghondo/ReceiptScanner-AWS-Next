@@ -1,6 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
 
+interface ReceiptData {
+  data: {
+    date?: string;
+    vendor?: string;
+    merchant?: string;
+    store?: string;
+    location?: string;
+    category?: string;
+    total?: string;
+  };
+}
+
+interface MileageEntry {
+  date?: string;
+  startAddress?: string;
+  endAddress?: string;
+  businessPurpose?: string;
+  mileage?: number;
+  reimbursableDistance?: number;
+  reimbursableAmount?: number;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { receipts, mileageEntries, employeeName } = await request.json();
@@ -18,7 +40,7 @@ export async function POST(request: NextRequest) {
     // Create main expense sheet
     const expenseSheet = workbook.addWorksheet('Expense Report');
     
-    // Set column widths to match original (many columns for the full expense report layout)
+    // Set column widths to match original (removed gaps at J and L)
     const columnWidths = [
       12, // A: Date
       25, // B: Location
@@ -29,18 +51,16 @@ export async function POST(request: NextRequest) {
       12, // G: Hotel/Motel
       12, // H: Meals
       12, // I: Entertainment
-      10, // J: Empty
-      12, // K: Transport
-      10, // L: Empty
-      12, // M: Computer Supplies
-      12, // N: Cell Phone
-      12, // O: Gas/Mileage
-      12, // P: Copies
-      12, // Q: Dues
-      12, // R: Postage
-      12, // S: Office Supplies
-      12, // T: Misc
-      12, // U: Totals
+      12, // J: Transport (moved from K)
+      12, // K: Computer Supplies (moved from M)
+      12, // L: Cell Phone (moved from N)
+      12, // M: Gas/Mileage (moved from O)
+      12, // N: Copies (moved from P)
+      12, // O: Dues (moved from Q)
+      12, // P: Postage (moved from R)
+      12, // Q: Office Supplies (moved from S)
+      12, // R: Misc (moved from T)
+      12, // S: Totals (moved from U)
     ];
     
     expenseSheet.columns = columnWidths.map(width => ({ width }));
@@ -49,7 +69,7 @@ export async function POST(request: NextRequest) {
     // Row 2: Title
     expenseSheet.mergeCells('D2:K2');
     const titleCell = expenseSheet.getCell('D2');
-    titleCell.value = 'Purpose Leaf EXPENSE REPORT';
+    titleCell.value = 'EXPENSE REPORT';
     titleCell.font = { size: 14, bold: true };
     titleCell.alignment = { horizontal: 'center' };
 
@@ -81,14 +101,14 @@ export async function POST(request: NextRequest) {
     const row8 = expenseSheet.getRow(8);
     row8.getCell(7).value = 'HOTEL/';
     row8.getCell(9).value = 'ENTER-*';
-    row8.getCell(11).value = 'TRANSPORT';
-    row8.getCell(13).value = 'COMPUTER';
-    row8.getCell(14).value = 'CELL PHONE';
-    row8.getCell(15).value = 'GAS';
-    row8.getCell(16).value = 'COPIES';
-    row8.getCell(17).value = 'DUES';
-    row8.getCell(18).value = 'POSTAGE';
-    row8.getCell(19).value = 'OFFICE';
+    row8.getCell(10).value = 'TRANSPORT';
+    row8.getCell(11).value = 'COMPUTER';
+    row8.getCell(12).value = 'CELL PHONE';
+    row8.getCell(13).value = 'GAS';
+    row8.getCell(14).value = 'COPIES';
+    row8.getCell(15).value = 'DUES';
+    row8.getCell(16).value = 'POSTAGE';
+    row8.getCell(17).value = 'OFFICE';
 
     // Row 9: Column headers part 2
     const row9 = expenseSheet.getRow(9);
@@ -98,14 +118,14 @@ export async function POST(request: NextRequest) {
     row9.getCell(7).value = 'MOTEL';
     row9.getCell(8).value = 'MEALS';
     row9.getCell(9).value = 'TAINMENT';
-    row9.getCell(11).value = 'AIR--RAIL';
-    row9.getCell(13).value = 'SUPPLIES';
-    row9.getCell(19).value = 'SUPPLIES';
-    row9.getCell(20).value = 'MISC*';
-    row9.getCell(21).value = 'TOTALS';
+    row9.getCell(10).value = 'AIR--RAIL';
+    row9.getCell(11).value = 'SUPPLIES';
+    row9.getCell(17).value = 'SUPPLIES';
+    row9.getCell(18).value = 'MISC*';
+    row9.getCell(19).value = 'TOTALS';
     
     // Style header rows
-    for (let col = 1; col <= 21; col++) {
+    for (let col = 1; col <= 19; col++) {
       row9.getCell(col).font = { bold: true, size: 10 };
       row9.getCell(col).fill = {
         type: 'pattern',
@@ -140,15 +160,20 @@ export async function POST(request: NextRequest) {
     const maxExpenseRow = 37;
     
     if (receipts && receipts.length > 0) {
-      receipts.forEach((receipt: any) => {
+      receipts.forEach((receipt: ReceiptData) => {
         if (currentRow <= maxExpenseRow) {
           const row = expenseSheet.getRow(currentRow);
+          
+          // Debug: Log receipt data to see what fields are available
+          console.log('Receipt data:', receipt.data);
           
           // Date (Column A)
           row.getCell(1).value = receipt.data.date || '';
           
-          // Location (Column B)
-          row.getCell(2).value = receipt.data.vendor || '';
+          // Location (Column B) - Try multiple possible field names for merchant/vendor
+          const merchant = receipt.data.vendor || receipt.data.merchant || receipt.data.store || receipt.data.location || '';
+          row.getCell(2).value = merchant;
+          console.log('Setting location to:', merchant);
           
           // Purpose (Column D)
           row.getCell(4).value = receipt.data.category || 'Business Expense';
@@ -156,37 +181,56 @@ export async function POST(request: NextRequest) {
           // Amount in appropriate column based on category
           const amount = parseFloat(receipt.data.total?.replace(/[^\d.-]/g, '') || '0');
           
-          // Categorize expenses
-          if (receipt.data.category?.toLowerCase().includes('hotel') || 
-              receipt.data.category?.toLowerCase().includes('lodging')) {
-            row.getCell(7).value = amount; // Hotel column
+          // Categorize expenses based on dropdown categories
+          const category = receipt.data.category?.toLowerCase() || '';
+          
+          if (category.includes('hotel') || category.includes('lodging') || category.includes('motel')) {
+            row.getCell(7).value = amount; // G: Hotel/Motel
             hotelTotal += amount;
-          } else if (receipt.data.category?.toLowerCase().includes('food') || 
-                     receipt.data.category?.toLowerCase().includes('meal') ||
+          } else if (category.includes('food') || category.includes('meal') || category.includes('restaurant') ||
                      receipt.data.vendor?.toLowerCase().includes('restaurant')) {
-            row.getCell(8).value = amount; // Meals column
+            row.getCell(8).value = amount; // H: Meals
             mealTotal += amount;
-          } else if (receipt.data.category?.toLowerCase().includes('transport') ||
-                     receipt.data.category?.toLowerCase().includes('uber') ||
-                     receipt.data.category?.toLowerCase().includes('lyft') ||
-                     receipt.data.category?.toLowerCase().includes('taxi')) {
-            row.getCell(11).value = amount; // Transport column
+          } else if (category.includes('entertainment')) {
+            row.getCell(9).value = amount; // I: Entertainment
+            entertainmentTotal += amount;
+          } else if (category.includes('transport') || category.includes('uber') || category.includes('lyft') ||
+                     category.includes('taxi') || category.includes('air') || category.includes('rail')) {
+            row.getCell(10).value = amount; // J: Transport
             transportTotal += amount;
-          } else if (receipt.data.category?.toLowerCase().includes('office')) {
-            row.getCell(19).value = amount; // Office supplies column
+          } else if (category.includes('computer') || category.includes('supplies')) {
+            row.getCell(11).value = amount; // K: Computer Supplies
+            computerTotal += amount;
+          } else if (category.includes('cell') || category.includes('phone')) {
+            row.getCell(12).value = amount; // L: Cell Phone
+            cellPhoneTotal += amount;
+          } else if (category.includes('gas') || category.includes('mileage') || category.includes('fuel')) {
+            row.getCell(13).value = amount; // M: Gas/Mileage
+            gasTotal += amount;
+          } else if (category.includes('copies') || category.includes('printing')) {
+            row.getCell(14).value = amount; // N: Copies
+            copiesTotal += amount;
+          } else if (category.includes('dues') || category.includes('membership')) {
+            row.getCell(15).value = amount; // O: Dues
+            duesTotal += amount;
+          } else if (category.includes('postage') || category.includes('shipping')) {
+            row.getCell(16).value = amount; // P: Postage
+            postageTotal += amount;
+          } else if (category.includes('office')) {
+            row.getCell(17).value = amount; // Q: Office Supplies
             officeTotal += amount;
           } else {
-            row.getCell(20).value = amount; // Misc column
+            row.getCell(18).value = amount; // R: Misc
             miscTotal += amount;
           }
           
-          // Row total in column U (21)
-          row.getCell(21).value = amount;
-          row.getCell(21).numFmt = '$#,##0.00';
+          // Row total in column S (19)
+          row.getCell(19).value = amount;
+          row.getCell(19).numFmt = '$#,##0.00';
           grandTotal += amount;
           
           // Add borders to all cells in the row
-          for (let col = 1; col <= 21; col++) {
+          for (let col = 1; col <= 19; col++) {
             row.getCell(col).border = {
               top: { style: 'thin' },
               left: { style: 'thin' },
@@ -194,7 +238,7 @@ export async function POST(request: NextRequest) {
               right: { style: 'thin' }
             };
             // Format currency columns
-            if (col >= 7 && col <= 21) {
+            if (col >= 7 && col <= 19) {
               const cell = row.getCell(col);
               if (cell.value && typeof cell.value === 'number') {
                 cell.numFmt = '$#,##0.00';
@@ -210,7 +254,7 @@ export async function POST(request: NextRequest) {
     // Fill remaining rows up to row 37 with empty bordered cells
     while (currentRow <= maxExpenseRow) {
       const row = expenseSheet.getRow(currentRow);
-      for (let col = 1; col <= 21; col++) {
+      for (let col = 1; col <= 19; col++) {
         row.getCell(col).value = '';
         row.getCell(col).border = {
           top: { style: 'thin' },
@@ -219,7 +263,7 @@ export async function POST(request: NextRequest) {
           right: { style: 'thin' }
         };
         // Set $0.00 for totals column
-        if (col === 21) {
+        if (col === 19) {
           row.getCell(col).value = 0;
           row.getCell(col).numFmt = '$#,##0.00';
         }
@@ -230,7 +274,7 @@ export async function POST(request: NextRequest) {
     // Add mileage total to gas column
     let mileageTotal = 0;
     if (mileageEntries && mileageEntries.length > 0) {
-      mileageTotal = mileageEntries.reduce((sum: number, entry: any) => 
+      mileageTotal = mileageEntries.reduce((sum: number, entry: MileageEntry) => 
         sum + (entry.reimbursableAmount || 0), 0
       );
       gasTotal = mileageTotal;
@@ -238,7 +282,7 @@ export async function POST(request: NextRequest) {
 
     // Row 38: Empty row
     const row38 = expenseSheet.getRow(38);
-    for (let col = 1; col <= 21; col++) {
+    for (let col = 1; col <= 19; col++) {
       row38.getCell(col).value = '';
     }
 
@@ -249,19 +293,19 @@ export async function POST(request: NextRequest) {
     row39.getCell(7).value = hotelTotal || '';
     row39.getCell(8).value = mealTotal || '';
     row39.getCell(9).value = entertainmentTotal || '';
-    row39.getCell(11).value = transportTotal || '';
-    row39.getCell(13).value = computerTotal || '';
-    row39.getCell(14).value = cellPhoneTotal || '';
-    row39.getCell(15).value = gasTotal || '';
-    row39.getCell(16).value = copiesTotal || '';
-    row39.getCell(17).value = duesTotal || '';
-    row39.getCell(18).value = postageTotal || '';
-    row39.getCell(19).value = officeTotal || '';
-    row39.getCell(20).value = miscTotal || '';
-    row39.getCell(21).value = grandTotal + mileageTotal;
+    row39.getCell(10).value = transportTotal || '';
+    row39.getCell(11).value = computerTotal || '';
+    row39.getCell(12).value = cellPhoneTotal || '';
+    row39.getCell(13).value = gasTotal || '';
+    row39.getCell(14).value = copiesTotal || '';
+    row39.getCell(15).value = duesTotal || '';
+    row39.getCell(16).value = postageTotal || '';
+    row39.getCell(17).value = officeTotal || '';
+    row39.getCell(18).value = miscTotal || '';
+    row39.getCell(19).value = grandTotal + mileageTotal;
     
     // Format and style totals row
-    for (let col = 7; col <= 21; col++) {
+    for (let col = 7; col <= 19; col++) {
       const cell = row39.getCell(col);
       if (cell.value && typeof cell.value === 'number') {
         cell.numFmt = '$#,##0.00';
@@ -300,7 +344,7 @@ export async function POST(request: NextRequest) {
     row42.getCell(11).value = 'Account';
     row42.getCell(12).value = 'Amount';
 
-    let codingRow = 43;
+    const codingRow = 43;
     accountCoding.forEach((code, index) => {
       const row = expenseSheet.getRow(codingRow + Math.floor(index / 2));
       const colOffset = (index % 2) === 0 ? 6 : 10;
@@ -342,8 +386,8 @@ export async function POST(request: NextRequest) {
     row54.getCell(19).value = grandTotal + mileageTotal;
     row54.getCell(19).numFmt = '$#,##0.00';
     row54.getCell(19).font = { bold: true };
-    row54.getCell(21).value = 'EMPLOYEE (SIGNATURE)';
-    row54.getCell(25).value = 'DATE SIGNED';
+    row54.getCell(20).value = 'EMPLOYEE (SIGNATURE)';
+    row54.getCell(21).value = 'DATE SIGNED';
 
     // Row 55: Net advances
     const row55 = expenseSheet.getRow(55);
@@ -353,8 +397,8 @@ export async function POST(request: NextRequest) {
 
     // Row 56: Approved by
     const row56 = expenseSheet.getRow(56);
-    row56.getCell(21).value = 'APPROVED BY:';
-    row56.getCell(25).value = 'DATE SIGNED';
+    row56.getCell(20).value = 'APPROVED BY:';
+    row56.getCell(21).value = 'DATE SIGNED';
 
     // Row 57: Balance due
     const row57 = expenseSheet.getRow(57);
@@ -420,7 +464,7 @@ export async function POST(request: NextRequest) {
       let mileageRow = 5;
       let totalMiles = 0;
       
-      mileageEntries.forEach((entry: any) => {
+      mileageEntries.forEach((entry: MileageEntry) => {
         const row = mileageSheet.getRow(mileageRow);
         
         row.getCell(1).value = entry.date;
@@ -489,7 +533,7 @@ export async function POST(request: NextRequest) {
     const fileName = `Expense Report - ${employeeName} - ${today}.xlsx`;
 
     // Return the file
-    return new NextResponse(buffer, {
+    return new NextResponse(Buffer.from(buffer), {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': `attachment; filename="${fileName}"`,

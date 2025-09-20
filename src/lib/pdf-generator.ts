@@ -134,7 +134,7 @@ export class PDFGenerator {
             resolve();
           };
           img.onerror = reject;
-          img.src = receipt.originalImage.dataUrl;
+          img.src = receipt.originalImage?.dataUrl || '';
         });
 
       } catch (error) {

@@ -65,6 +65,7 @@ export class ExcelGenerator {
       'LOCATION',
       'PURPOSE OF TRIP/EXPENDITURE',
       'HOTEL/\nMOTEL',
+      // 'HOTEL/MOTEL',
       'MEALS',
       'ENTER-\nTAINMENT',
       'TRANSPORT\nAIR-RAIL',

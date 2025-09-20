@@ -97,31 +97,25 @@ export async function POST(request: NextRequest) {
     row7.getCell(1).value = 'LISTING AND DESCRIPTION OF REIMBURSABLE EXPENSES';
     row7.getCell(1).font = { bold: true };
 
-    // Row 8: Column headers part 1
-    const row8 = expenseSheet.getRow(8);
-    row8.getCell(7).value = 'HOTEL/';
-    row8.getCell(9).value = 'ENTER-*';
-    row8.getCell(10).value = 'TRANSPORT';
-    row8.getCell(11).value = 'COMPUTER';
-    row8.getCell(12).value = 'CELL PHONE';
-    row8.getCell(13).value = 'GAS';
-    row8.getCell(14).value = 'COPIES';
-    row8.getCell(15).value = 'DUES';
-    row8.getCell(16).value = 'POSTAGE';
-    row8.getCell(17).value = 'OFFICE';
-
-    // Row 9: Column headers part 2
+    // Row 8: Empty row for spacing
+    
+    // Row 9: All column headers in one row
     const row9 = expenseSheet.getRow(9);
     row9.getCell(1).value = 'DATE';
     row9.getCell(2).value = 'LOCATION';
     row9.getCell(4).value = 'PURPOSE OF TRIP/EXPENDITURE';
-    row9.getCell(7).value = 'MOTEL';
+    row9.getCell(7).value = 'HOTEL/MOTEL';
     row9.getCell(8).value = 'MEALS';
-    row9.getCell(9).value = 'TAINMENT';
-    row9.getCell(10).value = 'AIR--RAIL';
-    row9.getCell(11).value = 'SUPPLIES';
-    row9.getCell(17).value = 'SUPPLIES';
-    row9.getCell(18).value = 'MISC*';
+    row9.getCell(9).value = 'ENTERTAINMENT';
+    row9.getCell(10).value = 'TRANSPORT';
+    row9.getCell(11).value = 'COMPUTER SUPPLIES';
+    row9.getCell(12).value = 'CELL PHONE';
+    row9.getCell(13).value = 'GAS/MILEAGE';
+    row9.getCell(14).value = 'COPIES';
+    row9.getCell(15).value = 'DUES';
+    row9.getCell(16).value = 'POSTAGE';
+    row9.getCell(17).value = 'OFFICE SUPPLIES';
+    row9.getCell(18).value = 'MISC';
     row9.getCell(19).value = 'TOTALS';
     
     // Style header rows

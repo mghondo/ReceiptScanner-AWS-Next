@@ -103,7 +103,11 @@ export class ExcelGenerator {
     });
 
     // Sort receipts by date
+    console.log('[ExcelGenerator] ============ DATE SORTING DEBUG ============');
+    console.log('[ExcelGenerator] Original receipt dates:', data.receipts.map(r => r.data.date || 'no date'));
     const sortedReceipts = this.sortReceiptsByDate(data.receipts);
+    console.log('[ExcelGenerator] After sorting:', sortedReceipts.map(r => r.data.date || 'no date'));
+    console.log('[ExcelGenerator] =========================================');
 
     // Handle dynamic row insertion if needed
     const maxRowsInTemplate = 28; // Rows 10-37
@@ -313,15 +317,126 @@ export class ExcelGenerator {
     approvalRow.getCell(15).font = { size: 9 };
   }
 
+  private static normalizeDate(dateStr: string): string {
+    if (!dateStr) return dateStr;
+    
+    // Remove leading zeros from month and day
+    // Convert 09/05/25 to 9/5/25
+    const parts = dateStr.split(/[\/\-]/);
+    if (parts.length === 3) {
+      const month = parseInt(parts[0], 10).toString();
+      const day = parseInt(parts[1], 10).toString();
+      const year = parts[2];
+      return `${month}/${day}/${year}`;
+    }
+    return dateStr;
+  }
+
   private static sortReceiptsByDate(receipts: ReceiptEntry[]): ReceiptEntry[] {
-    return [...receipts].sort((a, b) => {
-      if (!a.data.date && !b.data.date) return 0;
-      if (!a.data.date) return 1;
-      if (!b.data.date) return -1;
-      const dateA = new Date(a.data.date);
-      const dateB = new Date(b.data.date);
-      return dateA.getTime() - dateB.getTime();
+    console.log('[ExcelGenerator] Starting date sort for receipts...');
+    
+    const receiptsWithParsedDates = receipts.map(receipt => {
+      // Normalize the date first (remove leading zeros)
+      const normalizedDate = this.normalizeDate(receipt.data.date || '');
+      const parsedDate = this.parseReceiptDate(normalizedDate);
+      return {
+        receipt,
+        parsedDate,
+        originalDate: receipt.data.date,
+        normalizedDate
+      };
     });
+    
+    // Log parsing results
+    receiptsWithParsedDates.forEach(item => {
+      if (item.parsedDate) {
+        console.log(`[ExcelGenerator] "${item.originalDate}" -> normalized to "${item.normalizedDate}" -> parsed to: ${item.parsedDate.toLocaleDateString('en-US')}`);
+      } else {
+        console.log(`[ExcelGenerator] "${item.originalDate}" could not be parsed`);
+      }
+    });
+    
+    // Sort by parsed dates
+    receiptsWithParsedDates.sort((a, b) => {
+      // Handle null dates
+      if (!a.parsedDate && !b.parsedDate) return 0;
+      if (!a.parsedDate) return 1;  // null dates to end
+      if (!b.parsedDate) return -1; // null dates to end
+      
+      // Use the sortValue for more reliable sorting
+      const aSortValue = (a.parsedDate as any).sortValue || 0;
+      const bSortValue = (b.parsedDate as any).sortValue || 0;
+      
+      const diff = aSortValue - bSortValue;
+      console.log(`[ExcelGenerator] Comparing ${a.originalDate} (${aSortValue}) vs ${b.originalDate} (${bSortValue}): ${diff}`);
+      return diff;
+    });
+    
+    console.log('[ExcelGenerator] Final sorted order:', 
+      receiptsWithParsedDates.map(item => item.originalDate || 'no date'));
+    
+    return receiptsWithParsedDates.map(item => item.receipt);
+  }
+
+  private static parseReceiptDate(dateStr: string): Date | null {
+    if (!dateStr) return null;
+    
+    // Clean the date string
+    const cleanedDate = dateStr.trim();
+    
+    try {
+      // Handle various date formats with explicit parsing
+      // Match M/D/YY or MM/DD/YY or M/D/YYYY or MM/DD/YYYY
+      const dateMatch = cleanedDate.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+      if (dateMatch) {
+        const month = parseInt(dateMatch[1], 10);
+        const day = parseInt(dateMatch[2], 10);
+        let year = parseInt(dateMatch[3], 10);
+        
+        // Convert 2-digit year to 4-digit
+        if (year < 100) {
+          year = 2000 + year;  // Always assume 20xx for 2-digit years
+        }
+        
+        // Validate date components
+        if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 1900 && year <= 2100) {
+          // Create a sortable date value (year * 10000 + month * 100 + day)
+          // This ensures proper sorting regardless of timezone issues
+          const sortValue = year * 10000 + month * 100 + day;
+          
+          // Create the actual date object
+          const parsedDate = new Date(year, month - 1, day, 12, 0, 0); // Use noon to avoid DST issues
+          
+          // Store the sort value as a property for debugging
+          (parsedDate as any).sortValue = sortValue;
+          
+          console.log(`[ExcelGenerator] Parsed date: "${dateStr}" -> ${month}/${day}/${year} -> sortValue: ${sortValue}`);
+          return parsedDate;
+        }
+      }
+      
+      // Try ISO format (YYYY-MM-DD)
+      const isoMatch = cleanedDate.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (isoMatch) {
+        const year = parseInt(isoMatch[1], 10);
+        const month = parseInt(isoMatch[2], 10);
+        const day = parseInt(isoMatch[3], 10);
+        
+        if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 1900 && year <= 2100) {
+          const sortValue = year * 10000 + month * 100 + day;
+          const parsedDate = new Date(year, month - 1, day, 12, 0, 0);
+          (parsedDate as any).sortValue = sortValue;
+          console.log(`[ExcelGenerator] Parsed ISO date: "${dateStr}" -> ${month}/${day}/${year} -> sortValue: ${sortValue}`);
+          return parsedDate;
+        }
+      }
+      
+      console.warn(`[ExcelGenerator] Could not parse date: "${dateStr}"`);
+      return null;
+    } catch (error) {
+      console.warn(`[ExcelGenerator] Error parsing date "${dateStr}":`, error);
+      return null;
+    }
   }
 
   private static parseAmount(amount?: string): number {
@@ -331,9 +446,43 @@ export class ExcelGenerator {
   }
 
   private static formatDate(dateStr: string): string {
+    if (!dateStr) return '';
+    
     try {
-      const date = new Date(dateStr);
-      return date.toLocaleDateString('en-US');
+      // Parse the date string to get components
+      const dateMatch = dateStr.trim().match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+      if (dateMatch) {
+        const month = parseInt(dateMatch[1], 10);
+        const day = parseInt(dateMatch[2], 10);
+        let year = parseInt(dateMatch[3], 10);
+        
+        // Convert 2-digit year to 4-digit
+        if (year < 100) {
+          year = 2000 + year;
+        }
+        
+        // Format with leading zeros for month and day when needed
+        const formattedMonth = month.toString().padStart(2, '0');
+        const formattedDay = day.toString().padStart(2, '0');
+        
+        return `${formattedMonth}/${formattedDay}/${year}`;
+      }
+      
+      // Try ISO format
+      const isoMatch = dateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (isoMatch) {
+        const year = parseInt(isoMatch[1], 10);
+        const month = parseInt(isoMatch[2], 10);
+        const day = parseInt(isoMatch[3], 10);
+        
+        const formattedMonth = month.toString().padStart(2, '0');
+        const formattedDay = day.toString().padStart(2, '0');
+        
+        return `${formattedMonth}/${formattedDay}/${year}`;
+      }
+      
+      // Fallback to original string if can't parse
+      return dateStr;
     } catch (error) {
       return dateStr;
     }

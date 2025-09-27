@@ -16,6 +16,9 @@
 # next.js
 /.next/
 /out/
+# Deploy folder build artifacts
+/deploy/.next/
+/deploy/out/
 
 # production
 /build

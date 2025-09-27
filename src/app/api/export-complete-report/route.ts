@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import ExcelJS from 'exceljs';
+
+export const maxDuration = 10;
 
 interface ReceiptData {
   data: {
@@ -25,16 +26,30 @@ interface MileageEntry {
 
 export async function POST(request: NextRequest) {
   try {
-    const { receipts, mileageEntries, employeeName } = await request.json();
+    console.log('[API] export-complete-report started');
+    const requestBody = await request.json();
+    const { receipts, mileageEntries, employeeName } = requestBody;
+    
+    console.log('[API] Data received:', {
+      employeeName,
+      receiptsCount: receipts?.length || 0,
+      mileageCount: mileageEntries?.length || 0
+    });
     
     if (!employeeName) {
+      console.error('[API] Missing employee name');
       return NextResponse.json(
         { error: 'Employee name is required' },
         { status: 400 }
       );
     }
 
+    console.log('[API] Importing ExcelJS dynamically...');
+    const ExcelJS = (await import('exceljs')).default;
+    console.log('[API] ExcelJS imported successfully');
+
     // Create a new workbook that matches the original template structure
+    console.log('[API] Creating workbook...');
     const workbook = new ExcelJS.Workbook();
     
     // Create main expense sheet
@@ -154,15 +169,79 @@ export async function POST(request: NextRequest) {
     const maxExpenseRow = 37;
     
     if (receipts && receipts.length > 0) {
-      receipts.forEach((receipt: ReceiptData) => {
+      // Sort receipts by date before processing
+      const sortedReceipts = [...receipts].sort((a: ReceiptData, b: ReceiptData) => {
+        const dateA = a.data.date || '';
+        const dateB = b.data.date || '';
+        
+        if (!dateA && !dateB) return 0;
+        if (!dateA) return 1; // No date goes to end
+        if (!dateB) return -1; // No date goes to end
+        
+        // Parse dates properly
+        const parseDate = (dateStr: string): Date | null => {
+          if (!dateStr) return null;
+          
+          // Match M/D/YY or MM/DD/YY or M/D/YYYY or MM/DD/YYYY format
+          const match = dateStr.trim().match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+          if (match) {
+            const month = parseInt(match[1], 10);
+            const day = parseInt(match[2], 10);
+            let year = parseInt(match[3], 10);
+            
+            // Convert 2-digit year to 4-digit
+            if (year < 100) {
+              year = 2000 + year;
+            }
+            
+            return new Date(year, month - 1, day, 12, 0, 0);
+          }
+          return null;
+        };
+        
+        const parsedDateA = parseDate(dateA);
+        const parsedDateB = parseDate(dateB);
+        
+        if (!parsedDateA && !parsedDateB) return 0;
+        if (!parsedDateA) return 1;
+        if (!parsedDateB) return -1;
+        
+        return parsedDateA.getTime() - parsedDateB.getTime();
+      });
+      
+      console.log('[API] Sorted dates:', sortedReceipts.map((r: ReceiptData) => r.data.date));
+      
+      sortedReceipts.forEach((receipt: ReceiptData) => {
         if (currentRow <= maxExpenseRow) {
           const row = expenseSheet.getRow(currentRow);
           
           // Debug: Log receipt data to see what fields are available
           console.log('Receipt data:', receipt.data);
           
-          // Date (Column A)
-          row.getCell(1).value = receipt.data.date || '';
+          // Date (Column A) - Format with leading zeros
+          const formatDate = (dateStr: string | undefined): string => {
+            if (!dateStr) return '';
+            
+            const match = dateStr.trim().match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+            if (match) {
+              const month = parseInt(match[1], 10);
+              const day = parseInt(match[2], 10);
+              let year = parseInt(match[3], 10);
+              
+              if (year < 100) {
+                year = 2000 + year;
+              }
+              
+              // Format with leading zeros
+              const formattedMonth = month.toString().padStart(2, '0');
+              const formattedDay = day.toString().padStart(2, '0');
+              
+              return `${formattedMonth}/${formattedDay}/${year}`;
+            }
+            return dateStr;
+          };
+          
+          row.getCell(1).value = formatDate(receipt.data.date);
           
           // Location (Column B) - Try multiple possible field names for merchant/vendor
           const merchant = receipt.data.vendor || receipt.data.merchant || receipt.data.store || receipt.data.location || '';
@@ -520,12 +599,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate the Excel file
+    console.log('[API] Generating Excel buffer...');
     const buffer = await workbook.xlsx.writeBuffer();
+    console.log('[API] Excel buffer generated, size:', buffer.byteLength);
 
     // Create filename with employee name and date
     const today = new Date().toISOString().split('T')[0];
     const fileName = `Expense Report - ${employeeName} - ${today}.xlsx`;
 
+    console.log('[API] Returning file:', fileName);
     // Return the file
     return new NextResponse(Buffer.from(buffer), {
       headers: {

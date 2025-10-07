@@ -364,8 +364,8 @@ export class ExcelGenerator {
       if (!b.parsedDate) return -1; // null dates to end
       
       // Use the sortValue for more reliable sorting
-      const aSortValue = (a.parsedDate as any).sortValue || 0;
-      const bSortValue = (b.parsedDate as any).sortValue || 0;
+      const aSortValue = (a.parsedDate as Date & { sortValue?: number }).sortValue || 0;
+      const bSortValue = (b.parsedDate as Date & { sortValue?: number }).sortValue || 0;
       
       const diff = aSortValue - bSortValue;
       console.log(`[ExcelGenerator] Comparing ${a.originalDate} (${aSortValue}) vs ${b.originalDate} (${bSortValue}): ${diff}`);
@@ -408,7 +408,7 @@ export class ExcelGenerator {
           const parsedDate = new Date(year, month - 1, day, 12, 0, 0); // Use noon to avoid DST issues
           
           // Store the sort value as a property for debugging
-          (parsedDate as any).sortValue = sortValue;
+          (parsedDate as Date & { sortValue?: number }).sortValue = sortValue;
           
           console.log(`[ExcelGenerator] Parsed date: "${dateStr}" -> ${month}/${day}/${year} -> sortValue: ${sortValue}`);
           return parsedDate;
@@ -425,7 +425,7 @@ export class ExcelGenerator {
         if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 1900 && year <= 2100) {
           const sortValue = year * 10000 + month * 100 + day;
           const parsedDate = new Date(year, month - 1, day, 12, 0, 0);
-          (parsedDate as any).sortValue = sortValue;
+          (parsedDate as Date & { sortValue?: number }).sortValue = sortValue;
           console.log(`[ExcelGenerator] Parsed ISO date: "${dateStr}" -> ${month}/${day}/${year} -> sortValue: ${sortValue}`);
           return parsedDate;
         }

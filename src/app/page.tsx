@@ -384,8 +384,21 @@ export default function Home() {
       });
       
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.details || 'Failed to generate expense report');
+        let errorMessage = 'Failed to generate expense report';
+        try {
+          const error = await response.json();
+          errorMessage = error.details || error.error || errorMessage;
+        } catch (e) {
+          // Response is not JSON, try to get text
+          try {
+            const text = await response.text();
+            console.error('[MainPage] Server error response:', text);
+            errorMessage = `Server error (${response.status}): ${text.substring(0, 200)}`;
+          } catch {
+            errorMessage = `Server error: ${response.status} ${response.statusText}`;
+          }
+        }
+        throw new Error(errorMessage);
       }
       
       // Get the Excel buffer from the response

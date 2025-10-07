@@ -370,6 +370,14 @@ export default function Home() {
     try {
       console.log('[MainPage] Preparing complete expense report data');
       
+      // Strip out image data to reduce payload size
+      const receiptsWithoutImages = receipts.map(receipt => ({
+        id: receipt.id,
+        data: receipt.data,
+        timestamp: receipt.timestamp,
+        // Explicitly exclude originalImage to prevent 413 payload too large error
+      }));
+      
       // Use the new unified export endpoint that handles both receipts and mileage
       const response = await fetch('/api/export-complete-report', {
         method: 'POST',
@@ -377,7 +385,7 @@ export default function Home() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          receipts,
+          receipts: receiptsWithoutImages,
           mileageEntries,
           employeeName,
         }),

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { TextractService } from '@/lib/textract-service';
 import { S3Service } from '@/lib/s3-service';
 import { ImageValidator } from '@/lib/image-validator';
+// Redeploying with environment variables
 
 export async function POST(request: NextRequest) {
   try {
